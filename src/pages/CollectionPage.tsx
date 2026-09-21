@@ -100,8 +100,8 @@ export function CollectionPage({ wishlist }: { wishlist: boolean }) {
               </button>
             )}
           </label>
-          <a className="icon-btn only-mobile" href={wishlist ? '#/ajout/wishlist' : '#/ajout'} aria-label="Ajouter un jeu">
-            <Icon name="plus" size={22} />
+          <a className="icon-btn accent" href={wishlist ? '#/scan/wishlist' : '#/scan'} aria-label="Scanner un code-barre" title="Scanner un code-barre">
+            <Icon name="scan" size={22} />
           </a>
         </header>
 
@@ -177,11 +177,18 @@ export function CollectionPage({ wishlist }: { wishlist: boolean }) {
           ) : (
             <EmptyState
               title="Aucun jeu ne correspond"
-              text="Modifie la recherche ou les filtres."
+              text={query.text.trim() ? 'Pas dans ta collection. Tu veux le chercher en ligne ?' : 'Modifie la recherche ou les filtres.'}
               action={
-                <button type="button" className="btn" onClick={() => setQuery({ ...query, text: '', filters: emptyFilters() })}>
-                  Tout réinitialiser
-                </button>
+                <div className="btn-row center">
+                  {query.text.trim() && (
+                    <a className="btn primary" href={`#/ajout${wishlist ? '/wishlist' : ''}?q=${encodeURIComponent(query.text.trim())}`}>
+                      <Icon name="globe" size={18} /> Chercher « {query.text.trim()} » en ligne
+                    </a>
+                  )}
+                  <button type="button" className="btn" onClick={() => setQuery({ ...query, text: '', filters: emptyFilters() })}>
+                    Tout réinitialiser
+                  </button>
+                </div>
               }
             />
           )

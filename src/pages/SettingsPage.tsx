@@ -3,6 +3,7 @@ import { Segmented } from '../components/Controls'
 import { Icon } from '../components/Icon'
 import { useLocalState } from '../lib/hooks'
 import { completeness, familyShort, statusLabel } from '../lib/labels'
+import { ping, type Ping } from '../lib/online'
 import { useStore } from '../lib/store'
 import { checkSupabase, type Diagnostic } from '../lib/supabase'
 
@@ -31,10 +32,25 @@ export function SettingsPage() {
   const { session, items, games, copies, reload, loading, signOut } = useStore()
   const [theme, setTheme] = useLocalState<Theme>('ludo-theme', () => 'auto')
   const [diag, setDiag] = useState<Diagnostic | null>(null)
+  const [fn, setFn] = useState<{ p?: Ping; err?: string; testing?: boolean } | null>(null)
 
   useEffect(() => {
     checkSupabase().then(setDiag)
+    ping(false).then(
+      (p) => setFn({ p }),
+      (e) => setFn({ err: (e as Error).message }),
+    )
   }, [])
+
+  const testSources = () => {
+    setFn((f) => ({ ...f, testing: true }))
+    ping(true).then(
+      (p) => setFn({ p }),
+      (e) => setFn({ err: (e as Error).message }),
+    )
+  }
+
+  const noCover = [...games.values()].filter((g) => !g.cover_url).length
 
   const stamp = new Date().toISOString().slice(0, 10)
 
@@ -120,6 +136,59 @@ export function SettingsPage() {
       </section>
 
       <section className="block">
+        <h2>Recherche en ligne</h2>
+        {!fn ? (
+          <p className="muted">Vérification de la fonction « recherche »…</p>
+        ) : fn.err ? (
+          <p className="alert">{fn.err}</p>
+        ) : (
+          <ul className="checks">
+            {(
+              [
+                ['bgg', 'BoardGameGeek / RPGGeek (JdS, JdR)', 'secret BGG_TOKEN manquant'],
+                ['igdb', 'IGDB (jeux vidéo)', 'secrets TWITCH_CLIENT_ID / TWITCH_CLIENT_SECRET manquants'],
+                ['gameupc', 'GameUPC (code-barre JdS)', ''],
+                ['upcitemdb', 'UPCitemdb (code-barre JV, 100 / jour)', ''],
+                ['openlibrary', 'Open Library (ISBN, livres)', ''],
+              ] as const
+            ).map(([k, label, missing]) => {
+              const on = fn.p?.sources[k]
+              const check = fn.p?.checks[k]
+              const cls = !on ? 'ko' : check && check !== 'ok' ? 'ko' : 'ok'
+              return (
+                <li key={k}>
+                  <span className={`dot ${cls}`} /> {label} : {!on ? missing : check ? (check === 'ok' ? 'testé, OK' : check) : 'prêt'}
+                </li>
+              )
+            })}
+          </ul>
+        )}
+        <div className="btn-row">
+          <button type="button" className="btn" onClick={testSources} disabled={fn?.testing}>
+            <Icon name="refresh" size={18} /> {fn?.testing ? 'Test en cours…' : 'Tester les sources'}
+          </button>
+          <a className="btn" href="#/jaquettes">
+            <Icon name="image" size={18} /> Jaquettes automatiques{noCover ? ` (${noCover} sans image)` : ''}
+          </a>
+        </div>
+        <p className="muted small attribution">
+          Données :{' '}
+          <a href="https://boardgamegeek.com" target="_blank" rel="noreferrer">
+            Data from BoardGameGeek
+          </a>
+          ,{' '}
+          <a href="https://www.igdb.com" target="_blank" rel="noreferrer">
+            IGDB
+          </a>
+          ,{' '}
+          <a href="https://openlibrary.org" target="_blank" rel="noreferrer">
+            Open Library
+          </a>
+          , GameUPC, UPCitemdb.
+        </p>
+      </section>
+
+      <section className="block">
         <h2>Diagnostic</h2>
         <ul className="checks">
           <li>
@@ -130,7 +199,7 @@ export function SettingsPage() {
             {!diag ? 'vérification…' : diag.etat === 'ok' ? 'connectée' : diag.etat === 'absent' ? `non configurée (${diag.manque.join(', ')})` : diag.detail}
           </li>
         </ul>
-        <p className="muted small">Version lot 1 · collection, tri, filtres, wishlist, photos.</p>
+        <p className="muted small">Version lot 2 · collection, tri, filtres, wishlist, photos, recherche en ligne, scan, jaquettes.</p>
       </section>
     </div>
   )

@@ -142,3 +142,62 @@ export function cardLines(game: Game, copy: Copy): [string, string] {
   }
   return [l1, [playersText(game), durationText(game)].filter(Boolean).join(' · ') || kindLabel[game.kind]]
 }
+
+/** Plateformes IGDB → noms utilisés dans la collection (repris de l'export Gamekult). */
+const IGDB_PLATFORMS: Record<string, string> = {
+  'Super Nintendo Entertainment System': 'Super Nintendo',
+  'Super Famicom': 'Super Nintendo',
+  'Nintendo Entertainment System': 'NES',
+  'Family Computer': 'NES',
+  'Family Computer Disk System': 'NES',
+  Wii: 'Nintendo Wii',
+  'Wii U': 'Nintendo Wii U',
+  'Nintendo GameCube': 'GameCube',
+  'PlayStation Portable': 'PSP',
+  'Xbox Series X|S': 'Xbox Series',
+  'Sega Mega Drive/Genesis': 'Mega Drive',
+  'Sega Master System/Mark III': 'Master System',
+  'Sega Saturn': 'Saturn',
+  'Sega Game Gear': 'Game Gear',
+  'PC (Microsoft Windows)': 'PC',
+  DOS: 'PC',
+  Mac: 'Mac',
+  Linux: 'PC',
+}
+
+export function localPlatform(igdbName: string): string {
+  return IGDB_PLATFORMS[igdbName] ?? igdbName
+}
+
+/** Plateformes d'une source, en noms de la collection, sans doublon. */
+export function localPlatforms(names: string[]): string[] {
+  return [...new Set(names.map(localPlatform))]
+}
+
+/** Plateforme devinée d'un intitulé commercial (« PS4 », « Switch »…) → nom de la collection. */
+export function platformFromHint(hint: string | null | undefined): string | null {
+  if (!hint) return null
+  const h = hint.toLowerCase().replace(/\s+/g, ' ').trim()
+  const ps = h.match(/^(?:ps|playstation) ?([1-5])$/)
+  if (ps) return ps[1] === '1' ? 'PlayStation' : `PlayStation ${ps[1]}`
+  const table: [RegExp, string][] = [
+    [/vita/, 'PlayStation Vita'],
+    [/^psp|portable/, 'PSP'],
+    [/^playstation$/, 'PlayStation'],
+    [/switch ?2/, 'Nintendo Switch 2'],
+    [/switch/, 'Nintendo Switch'],
+    [/xbox ?one/, 'Xbox One'],
+    [/xbox ?360/, 'Xbox 360'],
+    [/xbox ?series/, 'Xbox Series'],
+    [/^xbox$/, 'Xbox'],
+    [/wii ?u/, 'Nintendo Wii U'],
+    [/wii/, 'Nintendo Wii'],
+    [/3ds/, 'Nintendo 3DS'],
+    [/^n?ds$|nintendo ds/, 'Nintendo DS'],
+    [/gamecube|game cube/, 'GameCube'],
+    [/advance|gba/, 'Game Boy Advance'],
+    [/dreamcast/, 'Dreamcast'],
+    [/^pc|dvd-?rom/, 'PC'],
+  ]
+  return table.find(([re]) => re.test(h))?.[1] ?? null
+}

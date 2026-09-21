@@ -12,6 +12,20 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['apple-touch-icon.png'],
+      workbox: {
+        // Jaquettes (BGG, IGDB, Open Library) gardées sur l'appareil : affichage rapide et hors-ligne
+        runtimeCaching: [
+          {
+            urlPattern: ({ url }) => ['cf.geekdo-images.com', 'images.igdb.com', 'covers.openlibrary.org'].includes(url.hostname),
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'jaquettes',
+              expiration: { maxEntries: 2500, maxAgeSeconds: 60 * 60 * 24 * 180 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+        ],
+      },
       manifest: {
         name: 'Ma Ludothèque',
         short_name: 'Ludothèque',

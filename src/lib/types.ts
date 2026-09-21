@@ -26,6 +26,8 @@ export interface Game {
   languages: string[]
   description: string | null
   cover_url: string | null
+  cover_thumb?: string | null // lot 2 (absent des caches antérieurs)
+  ext_ids?: Record<string, string> // lot 2 : { bgg: '432', igdb: '1234', openlibrary: '978…' }
   barcodes: string[]
   players_min: number | null
   players_max: number | null

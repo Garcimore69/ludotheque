@@ -3,7 +3,11 @@ import { Icon, type IconName } from './components/Icon'
 import { CollectionPage } from './pages/CollectionPage'
 import { EditPage } from './pages/EditPage'
 import { GamePage } from './pages/GamePage'
+import { CompletePage } from './pages/CompletePage'
+import { CoversPage } from './pages/CoversPage'
 import { LoginPage } from './pages/LoginPage'
+import { ScanPage } from './pages/ScanPage'
+import { SearchPage } from './pages/SearchPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { useRoute, type Route } from './lib/router'
 import { useStore } from './lib/store'
@@ -19,15 +23,16 @@ interface NavItem {
 const NAV: NavItem[] = [
   { key: 'collection', href: '#/', label: 'Collection', icon: 'collection', active: (r) => r.name === 'collection' || r.name === 'game' },
   { key: 'wishlist', href: '#/wishlist', label: 'Wishlist', icon: 'heart', active: (r) => r.name === 'wishlist' },
-  { key: 'add', href: '#/ajout', label: 'Ajouter', icon: 'plus', active: (r) => r.name === 'new' },
-  { key: 'settings', href: '#/reglages', label: 'Réglages', icon: 'settings', active: (r) => r.name === 'settings' },
+  { key: 'scan', href: '#/scan', label: 'Scan', icon: 'scan', active: (r) => r.name === 'scan' },
+  { key: 'add', href: '#/ajout', label: 'Ajouter', icon: 'plus', active: (r) => r.name === 'search' || r.name === 'new' },
+  { key: 'settings', href: '#/reglages', label: 'Réglages', icon: 'settings', active: (r) => r.name === 'settings' || r.name === 'covers' },
 ]
 
 function Shell({ route, children }: { route: Route; children: ReactNode }) {
   const { items } = useStore()
   const owned = items.filter((i) => i.copy.status === 'owned' || i.copy.status === 'loaned').length
   const wish = items.filter((i) => i.copy.status === 'wishlist').length
-  const editing = route.name === 'new' || route.name === 'editGame' || route.name === 'editCopy' || route.name === 'newCopy'
+  const editing = route.name === 'new' || route.name === 'editGame' || route.name === 'editCopy' || route.name === 'newCopy' || route.name === 'scan'
 
   return (
     <div className="shell">
@@ -39,7 +44,11 @@ function Shell({ route, children }: { route: Route; children: ReactNode }) {
         <a className="btn primary side-add" href="#/ajout">
           <Icon name="plus" size={18} /> Ajouter un jeu
         </a>
-        {NAV.filter((n) => n.key !== 'add').map((n) => (
+        <a className={route.name === 'scan' ? 'side-link active' : 'side-link'} href="#/scan">
+          <Icon name="scan" />
+          <span className="grow">Scanner</span>
+        </a>
+        {NAV.filter((n) => n.key !== 'add' && n.key !== 'scan').map((n) => (
           <a key={n.key} href={n.href} className={n.active(route) ? 'side-link active' : 'side-link'} aria-current={n.active(route) ? 'page' : undefined}>
             <Icon name={n.icon} />
             <span className="grow">{n.label}</span>
@@ -49,7 +58,6 @@ function Shell({ route, children }: { route: Route; children: ReactNode }) {
         ))}
         <div className="side-soon">
           <span className="side-soon-title">Bientôt</span>
-          <span>Recherche en ligne &amp; scan · lot 2</span>
           <span>Prêts, listes, stats, argus · lot 3</span>
         </div>
       </nav>
@@ -59,12 +67,12 @@ function Shell({ route, children }: { route: Route; children: ReactNode }) {
       {!editing && (
         <nav className="bottombar" aria-label="Navigation principale">
           {NAV.map((n) =>
-            n.key === 'add' ? (
-              <a key={n.key} href={n.href} className="bb-add" aria-label="Ajouter un jeu">
+            n.key === 'scan' ? (
+              <a key={n.key} href={n.href} className="bb-add" aria-label="Scanner un code-barre">
                 <span className="bb-add-btn">
-                  <Icon name="plus" size={28} stroke={2} />
+                  <Icon name="scan" size={28} stroke={2} />
                 </span>
-                <span>Ajouter</span>
+                <span>Scan</span>
               </a>
             ) : (
               <a key={n.key} href={n.href} className={n.active(route) ? 'bb-link active' : 'bb-link'} aria-current={n.active(route) ? 'page' : undefined}>
@@ -97,8 +105,20 @@ export default function App() {
     case 'game':
       page = <GamePage id={route.id} />
       break
+    case 'search':
+      page = <SearchPage key={`s-${route.wishlist}`} wishlist={route.wishlist} initial={route.q} code={route.code} />
+      break
     case 'new':
       page = <EditPage key={`new-${route.wishlist}`} mode={route} />
+      break
+    case 'scan':
+      page = <ScanPage key={`scan-${route.wishlist}`} wishlist={route.wishlist} />
+      break
+    case 'complete':
+      page = <CompletePage key={`cp-${route.id}`} id={route.id} />
+      break
+    case 'covers':
+      page = <CoversPage />
       break
     case 'editGame':
       page = <EditPage key={`eg-${route.id}`} mode={route} />

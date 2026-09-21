@@ -17,6 +17,7 @@ import {
   regionLabel,
   statusLabel,
 } from '../lib/labels'
+import { sourceUrl, SOURCE_LABEL } from '../lib/online'
 import { back, go } from '../lib/router'
 import { useStore } from '../lib/store'
 import type { Copy, Game, PlayStatus } from '../lib/types'
@@ -219,6 +220,24 @@ export function GamePage({ id }: { id: string }) {
     ['ISBN', game.isbn],
     ['Codes-barres', join(game.barcodes)],
     ['Source', game.source !== 'manuel' ? game.source : null],
+    [
+      'En ligne',
+      Object.keys(game.ext_ids ?? {}).length ? (
+        <span className="ext-links">
+          {Object.entries(game.ext_ids ?? {}).map(([s, x]) => {
+            const url = sourceUrl(s, x, game.family)
+            const label = s === 'bgg' && game.family === 'jdr' ? 'RPGGeek' : (SOURCE_LABEL[s] ?? s)
+            return url ? (
+              <a key={s} href={url} target="_blank" rel="noreferrer">
+                {label}
+              </a>
+            ) : (
+              <span key={s}>{label}</span>
+            )
+          })}
+        </span>
+      ) : null,
+    ],
   ]
 
   return (
@@ -241,6 +260,9 @@ export function GamePage({ id }: { id: string }) {
           <Icon name="back" size={22} />
         </button>
         <span className="grow" />
+        <a className="btn small" href={`#/jeu/${game.id}/completer`} title="Jaquette et informations depuis BGG, IGDB ou Open Library">
+          <Icon name="globe" size={18} /> Compléter
+        </a>
         <a className="btn small" href={`#/jeu/${game.id}/modifier`}>
           <Icon name="edit" size={18} /> Modifier
         </a>

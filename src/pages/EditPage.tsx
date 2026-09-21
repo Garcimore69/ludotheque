@@ -1,8 +1,10 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { Chip } from '../components/Controls'
 import { Icon } from '../components/Icon'
 import { EmptyState } from '../components/Items'
-import { conditionLabel, FAMILIES, familyLong, formatLabel, kindLabel, playStatusLabel, regionLabel, RPG_BOOK_TYPES, statusLabel } from '../lib/labels'
+import { Thumb } from '../components/Online'
+import { conditionLabel, FAMILIES, familyLong, formatLabel, kindLabel, localPlatforms, platformFromHint, playStatusLabel, regionLabel, RPG_BOOK_TYPES, statusLabel } from '../lib/labels'
+import { clearPending, draftToGame, peekPending, SOURCE_LABEL, type Pending } from '../lib/online'
 import { back, go } from '../lib/router'
 import { useStore } from '../lib/store'
 import type { Copy, CopyInput, Family, Game, GameInput } from '../lib/types'
@@ -50,6 +52,7 @@ const GAME_SECTIONS: SectionDef[] = [
       { key: 'barcodes', label: 'Codes-barres (EAN)', type: 'list', placeholder: 'ex. 3421272101337' },
       { key: 'community_rating', label: 'Note communauté /10', type: 'dec' },
       { key: 'description', label: 'Description', type: 'textarea', wide: true },
+      { key: 'cover_url', label: 'Jaquette (adresse de l’image)', type: 'text', wide: true, placeholder: 'https://…', hint: 'Remplie par la recherche en ligne ; la photo de ton exemplaire reste prioritaire.' },
     ],
   },
   {
@@ -303,13 +306,35 @@ export function EditPage({ mode }: { mode: EditMode }) {
   const withGame = mode.name === 'new' || mode.name === 'editGame'
   const withCopy = mode.name !== 'editGame'
 
-  const [family, setFamily] = useState<Family>(existingGame?.family ?? 'jds')
+  // Brouillon venu de la recherche en ligne ou du scan (formulaire d'ajout uniquement)
+  const [pending] = useState<Pending>(() => (mode.name === 'new' ? peekPending() : {}))
+  const draft = pending.draft
+  useEffect(() => {
+    if (mode.name === 'new') clearPending()
+  }, [mode.name])
+  const draftPlatforms = useMemo(() => (draft ? localPlatforms(draft.platforms) : []), [draft])
+
+  const [family, setFamily] = useState<Family>(existingGame?.family ?? draft?.family ?? 'jds')
+  const [useCover, setUseCover] = useState(true)
   const [values, setValues] = useState<Values>(() => {
-    const g = existingGame ? toValues(existingGame as unknown as Record<string, unknown>, GAME_SECTIONS) : toValues({ kind: 'base' }, GAME_SECTIONS)
+    const src: Record<string, unknown> = draft ? draftToGame(draft, games.values()) : { kind: 'base' }
+    if (pending.barcode) {
+      const code = pending.barcode
+      const list = (src.barcodes as string[] | undefined) ?? []
+      src.barcodes = list.includes(code) ? list : [...list, code]
+      if (!src.isbn && /^97[89]\d{10}$/.test(code) && (draft?.family ?? 'jds') === 'jdr') src.isbn = code
+    }
+    const g = existingGame ? toValues(existingGame as unknown as Record<string, unknown>, GAME_SECTIONS) : toValues(src, GAME_SECTIONS)
     const baseCopy: Record<string, unknown> =
       mode.name === 'editCopy' && existingCopy
         ? (existingCopy as unknown as Record<string, unknown>)
-        : { status: mode.name === 'new' && mode.wishlist ? 'wishlist' : 'owned' }
+        : {
+            status: mode.name === 'new' && mode.wishlist ? 'wishlist' : 'owned',
+            platform:
+              draftPlatforms.length === 1
+                ? draftPlatforms[0]
+                : (draftPlatforms.find((p) => p === platformFromHint(pending.platformHint)) ?? (draft ? null : platformFromHint(pending.platformHint))),
+          }
     return { ...g, ...toValues(baseCopy, COPY_SECTIONS) }
   })
   const [busy, setBusy] = useState(false)
@@ -321,13 +346,13 @@ export function EditPage({ mode }: { mode: EditMode }) {
     return {
       series: uniq(gs.map((g) => g.series)),
       rpg_system: uniq(gs.map((g) => g.rpg_system)),
-      platform: uniq(copies.map((c) => c.platform)),
+      platform: [...draftPlatforms, ...uniq(copies.map((c) => c.platform)).filter((p) => !draftPlatforms.includes(p))],
       store: uniq(copies.map((c) => c.store)),
       language: uniq(copies.map((c) => c.language)),
       purchase_place: uniq(copies.map((c) => c.purchase_place)),
       location: uniq(copies.map((c) => c.location)),
     }
-  }, [games, copies])
+  }, [games, copies, draftPlatforms])
 
   const bases = useMemo(
     () =>
@@ -358,9 +383,15 @@ export function EditPage({ mode }: { mode: EditMode }) {
       const c = fromValues(values, COPY_SECTIONS, family)
       if (!c.format) c.format = family === 'jv' ? 'physique' : family === 'jdr' ? 'papier' : null
       if (mode.name === 'new') {
+        if (draft) {
+          g.ext_ids = { [draft.source]: draft.external_id }
+          if (useCover && g.cover_url === draft.cover_url) g.cover_thumb = draft.cover_thumb
+          if (!useCover) g.cover_url = null
+        }
         const { game } = await store.createGameWithCopy({ ...(g as GameInput), family }, c as CopyInput)
         go(`/jeu/${game.id}`, true)
       } else if (mode.name === 'editGame') {
+        if ((g.cover_url ?? null) !== (existingGame!.cover_url ?? null)) g.cover_thumb = null
         await store.saveGame(mode.id, { ...(g as Partial<Game>), family })
         go(`/jeu/${mode.id}`, true)
       } else if (mode.name === 'newCopy') {
@@ -402,10 +433,46 @@ export function EditPage({ mode }: { mode: EditMode }) {
         </button>
       </div>
 
-      {mode.name === 'new' && (
+      {mode.name === 'new' && draft && (
+        <div className="draft-banner">
+          {draft.cover_url && (
+            <div className={useCover ? 'draft-cover' : 'draft-cover off'}>
+              <Thumb src={draft.cover_thumb ?? draft.cover_url} family={draft.family} title={draft.title} />
+            </div>
+          )}
+          <div className="grow">
+            <p>
+              <strong>Pré-rempli depuis {SOURCE_LABEL[draft.source] ?? draft.source}.</strong> Vérifie, puis complète ton exemplaire.
+            </p>
+            {draft.cover_url && (
+              <label className="check">
+                <input type="checkbox" checked={useCover} onChange={(e) => setUseCover(e.target.checked)} /> Utiliser cette jaquette
+              </label>
+            )}
+            {pending.barcode && <p className="muted small">Code-barre {pending.barcode} mémorisé avec la fiche.</p>}
+            {family === 'jv' && draftPlatforms.length > 1 && (
+              <div className="chips" role="group" aria-label="Plateforme de mon exemplaire">
+                {draftPlatforms.map((p) => (
+                  <Chip key={p} on={values.platform === p} onClick={() => set('platform', p)}>
+                    {p}
+                  </Chip>
+                ))}
+              </div>
+            )}
+          </div>
+          <button type="button" className="link-btn" onClick={() => back('/ajout')}>
+            Changer
+          </button>
+        </div>
+      )}
+
+      {mode.name === 'new' && !draft && (
         <div className="notice">
-          <Icon name="scan" size={20} />
-          <span>Saisie manuelle. La recherche en ligne et le scan du code-barre arrivent au lot 2.</span>
+          <Icon name="edit" size={20} />
+          <span className="grow">
+            Saisie manuelle{pending.barcode ? ` (code ${pending.barcode} repris)` : ''}. Tu peux aussi <a href={mode.wishlist ? '#/ajout/wishlist' : '#/ajout'}>chercher en ligne</a> ou{' '}
+            <a href={mode.wishlist ? '#/scan/wishlist' : '#/scan'}>scanner la boîte</a>.
+          </span>
         </div>
       )}
 
