@@ -1,21 +1,21 @@
 import { useEffect, useState } from 'react'
-import { checkSupabase } from './lib/supabase'
+import { checkSupabase, type Diagnostic } from './lib/supabase'
 
-type Etat = 'verif' | 'ok' | 'absent' | 'erreur'
-
-const libelles: Record<Etat, string> = {
-  verif: 'Vérification…',
-  ok: 'Connectée',
-  absent: 'Non configurée (variables GitHub manquantes)',
-  erreur: 'Injoignable (URL ou clé à vérifier)',
+function libelle(d: Diagnostic | null): string {
+  if (!d) return 'Vérification…'
+  if (d.etat === 'ok') return 'Connectée'
+  if (d.etat === 'absent') return `Non configurée (variable manquante : ${d.manque.join(', ')})`
+  return `Erreur : ${d.detail}`
 }
 
 export default function App() {
-  const [etat, setEtat] = useState<Etat>('verif')
+  const [diag, setDiag] = useState<Diagnostic | null>(null)
 
   useEffect(() => {
-    checkSupabase().then(setEtat)
+    checkSupabase().then(setDiag)
   }, [])
+
+  const dot = !diag ? 'wait' : diag.etat === 'ok' ? 'ok' : 'ko'
 
   return (
     <main className="page">
@@ -28,8 +28,7 @@ export default function App() {
           <span className="dot ok" /> Application publiée
         </li>
         <li>
-          <span className={`dot ${etat === 'ok' ? 'ok' : etat === 'verif' ? 'wait' : 'ko'}`} /> Base Supabase :{' '}
-          {libelles[etat]}
+          <span className={`dot ${dot}`} /> Base Supabase : {libelle(diag)}
         </li>
       </ul>
 
