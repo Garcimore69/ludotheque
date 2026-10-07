@@ -1,0 +1,50 @@
+# Maintient le projet Supabase actif (plan gratuit : pause après 7 jours sans activité).
+# Tous les 2 jours, appelle keepalive_ping() (une écriture réelle en base, aucune donnée exposée).
+# Si la base ne répond pas, le job échoue et GitHub t'envoie un e-mail.
+name: Keep-alive Supabase
+
+on:
+  schedule:
+    - cron: "17 6 */2 * *"   # 06:17 UTC, un jour sur deux
+  workflow_dispatch:          # lancement manuel depuis l'onglet Actions
+
+permissions:
+  actions: write   # pour réactiver ce workflow (règle GitHub des 60 jours)
+  contents: read
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Écriture dans la base Supabase
+        env:
+          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          set -u
+          URL="${SUPABASE_URL%/}"
+          URL="${URL%/rest/v1}"
+          for essai in 1 2 3; do
+            CODE=$(curl -sS -o reponse.txt -w "%{http_code}" -X POST \
+              "$URL/rest/v1/rpc/keepalive_ping" \
+              -H "apikey: $SUPABASE_KEY" \
+              -H "Content-Type: application/json" \
+              -d '{}' --max-time 30 || echo "000")
+            if [ "$CODE" = "200" ]; then
+              echo "OK - dernier ping : $(cat reponse.txt)"
+              exit 0
+            fi
+            echo "Essai $essai : HTTP $CODE - $(cat reponse.txt 2>/dev/null)"
+            sleep 20
+          done
+          echo "::error::Supabase ne répond pas (HTTP $CODE). Projet peut-être en pause : https://supabase.com/dashboard/project/_ > Restore project"
+          exit 1
+
+      - name: Réactivation du workflow (évite la désactivation après 60 jours)
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X PUT "repos/${{ github.repository }}/actions/workflows/keepalive.yml/enable" \
+            && echo "Workflow réactivé" || echo "Réactivation non nécessaire ou impossible"
