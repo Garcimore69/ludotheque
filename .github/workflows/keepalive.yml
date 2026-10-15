@@ -1,11 +1,12 @@
 # Maintient le projet Supabase actif (plan gratuit : pause après 7 jours sans activité).
-# Tous les 2 jours, appelle keepalive_ping() (une écriture réelle en base, aucune donnée exposée).
+# Chaque jour : écriture en base (keepalive_ping), appel de la fonction serveur et de l'Auth,
+# pour cumuler les trois types d'activité que Supabase surveille.
 # Si la base ne répond pas, le job échoue et GitHub t'envoie un e-mail.
 name: Keep-alive Supabase
 
 on:
   schedule:
-    - cron: "17 6 */2 * *"   # 06:17 UTC, un jour sur deux
+    - cron: "17 6 * * *"     # 06:17 UTC, tous les jours (GitHub retarde souvent de plusieurs heures)
   workflow_dispatch:          # lancement manuel depuis l'onglet Actions
 
 permissions:
@@ -30,7 +31,8 @@ jobs:
               "$URL/rest/v1/rpc/keepalive_ping" \
               -H "apikey: $SUPABASE_KEY" \
               -H "Content-Type: application/json" \
-              -d '{}' --max-time 30 || echo "000")
+              -d '{}' --max-time 30) || true
+            CODE="${CODE:-000}"
             if [ "$CODE" = "200" ]; then
               echo "OK - dernier ping : $(cat reponse.txt)"
               exit 0
@@ -40,6 +42,20 @@ jobs:
           done
           echo "::error::Supabase ne répond pas (HTTP $CODE). Projet peut-être en pause : https://supabase.com/dashboard/project/_ > Restore project"
           exit 1
+
+      - name: Activité complémentaire (fonction serveur + Auth)
+        if: success()
+        env:
+          SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          SUPABASE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+        run: |
+          URL="${SUPABASE_URL%/}"
+          URL="${URL%/rest/v1}"
+          F=$(curl -s -o /dev/null -w "%{http_code}" -X OPTIONS "$URL/functions/v1/recherche" \
+            -H "Origin: https://garcimore69.github.io" -H "apikey: $SUPABASE_KEY" --max-time 30) || true
+          A=$(curl -s -o /dev/null -w "%{http_code}" "$URL/auth/v1/health" \
+            -H "apikey: $SUPABASE_KEY" --max-time 30) || true
+          echo "Fonction recherche : HTTP ${F:-000} - Auth : HTTP ${A:-000}"
 
       - name: Réactivation du workflow (évite la désactivation après 60 jours)
         if: always()
