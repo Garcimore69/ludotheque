@@ -212,7 +212,7 @@ export function GamePage({ id }: { id: string }) {
     ['Éditeur', join(game.publishers)],
     ['Auteurs', join(game.authors)],
     ['Illustrateurs', join(game.illustrators)],
-    ['Genres', join(game.genres)],
+    [game.family === 'jds' ? 'Types' : 'Genres', join(game.genres)],
     ['Mécanismes', join(game.mechanics)],
     ['Thèmes', join(game.themes)],
     ['Langues', join(game.languages)],

@@ -170,6 +170,9 @@ export function SettingsPage() {
           <a className="btn" href="#/jaquettes">
             <Icon name="image" size={18} /> Jaquettes automatiques{noCover ? ` (${noCover} sans image)` : ''}
           </a>
+          <a className="btn" href="#/types">
+            <Icon name="filter" size={18} /> Types de jeu (BGG)
+          </a>
         </div>
         <p className="muted small attribution">
           Données :{' '}
@@ -199,7 +202,7 @@ export function SettingsPage() {
             {!diag ? 'vérification…' : diag.etat === 'ok' ? 'connectée' : diag.etat === 'absent' ? `non configurée (${diag.manque.join(', ')})` : diag.detail}
           </li>
         </ul>
-        <p className="muted small">Version lot 2 · collection, tri, filtres, wishlist, photos, recherche en ligne, scan, jaquettes.</p>
+        <p className="muted small">Version lot 2.1 · collection, tri, filtres, wishlist, photos, recherche en ligne, scan, jaquettes, types de jeu.</p>
       </section>
     </div>
   )

@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react'
  *   #/scan                 scan du code-barre (#/scan/wishlist)
  *   #/jeu/<id>/completer   compléter la fiche depuis internet
  *   #/jaquettes            jaquettes automatiques (traitement par lot)
+ *   #/types                types de jeu depuis BGG (traitement par lot)
  *   #/jeu/<id>/modifier    modifier la fiche
  *   #/jeu/<id>/exemplaire  ajouter un exemplaire
  *   #/exemplaire/<id>      modifier un exemplaire
@@ -24,6 +25,7 @@ export type Route =
   | { name: 'scan'; wishlist: boolean }
   | { name: 'complete'; id: string }
   | { name: 'covers' }
+  | { name: 'types' }
   | { name: 'editGame'; id: string }
   | { name: 'newCopy'; gameId: string }
   | { name: 'editCopy'; id: string }
@@ -39,6 +41,7 @@ export function parse(hash: string): Route {
   if (a === 'ajout') return { name: 'search', wishlist: b === 'wishlist', q: params.get('q') ?? '', code: params.get('code') ?? '' }
   if (a === 'scan') return { name: 'scan', wishlist: b === 'wishlist' }
   if (a === 'jaquettes') return { name: 'covers' }
+  if (a === 'types') return { name: 'types' }
   if (a === 'jeu' && b && c === 'completer') return { name: 'complete', id: b }
   if (a === 'reglages') return { name: 'settings' }
   if (a === 'jeu' && b && c === 'modifier') return { name: 'editGame', id: b }

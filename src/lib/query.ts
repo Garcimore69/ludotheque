@@ -17,8 +17,10 @@ export type SortKey =
   | 'value'
   | 'location'
   | 'playStatus'
+  | 'publisher'
+  | 'author'
 export type Dir = 'asc' | 'desc'
-export type GroupKey = 'none' | 'letter' | 'family' | 'platform' | 'platformFamily' | 'year' | 'series' | 'status'
+export type GroupKey = 'none' | 'letter' | 'family' | 'platform' | 'platformFamily' | 'year' | 'series' | 'status' | 'publisher' | 'author' | 'genre'
 export type View = 'grid' | 'list' | 'table'
 
 export const SORTS: { key: SortKey; label: string; dir: Dir }[] = [
@@ -37,6 +39,8 @@ export const SORTS: { key: SortKey; label: string; dir: Dir }[] = [
   { key: 'value', label: 'Valeur / cote', dir: 'desc' },
   { key: 'location', label: 'Emplacement', dir: 'asc' },
   { key: 'playStatus', label: 'Statut de jeu', dir: 'asc' },
+  { key: 'publisher', label: 'Éditeur', dir: 'asc' },
+  { key: 'author', label: 'Auteur', dir: 'asc' },
 ]
 export const sortLabel = (k: SortKey) => SORTS.find((s) => s.key === k)?.label ?? k
 
@@ -49,6 +53,9 @@ export const GROUPS: { key: GroupKey; label: string }[] = [
   { key: 'year', label: 'Année de sortie' },
   { key: 'series', label: 'Gamme' },
   { key: 'status', label: 'Statut' },
+  { key: 'publisher', label: 'Éditeur' },
+  { key: 'author', label: 'Auteur' },
+  { key: 'genre', label: 'Type / genre' },
 ]
 
 export interface Filters {
@@ -71,6 +78,7 @@ export interface Filters {
   addedDays: number | null
   languages: string[]
   publishers: string[]
+  authors: string[]
   locations: string[]
   tags: string[]
   series: string[]
@@ -109,6 +117,7 @@ export const emptyFilters = (): Filters => ({
   addedDays: null,
   languages: [],
   publishers: [],
+  authors: [],
   locations: [],
   tags: [],
   series: [],
@@ -198,6 +207,7 @@ export function matches(it: Item, q: Query, now = Date.now()): boolean {
   if (f.addedDays != null && now - new Date(c.added_at).getTime() > f.addedDays * 86400000) return false
   if (!anyOf(f.languages, c.language ? [c.language, ...g.languages] : g.languages)) return false
   if (!anyOf(f.publishers, g.publishers)) return false
+  if (!anyOf(f.authors ?? [], g.authors)) return false
   if (!any(f.locations, c.location)) return false
   if (!anyOf(f.tags, c.tags)) return false
   if (!any(f.series, g.series)) return false
@@ -246,6 +256,10 @@ function value(it: Item, k: SortKey): string | number | null {
       return c.location
     case 'playStatus':
       return c.play_status ? PLAY_ORDER[c.play_status] : null
+    case 'publisher':
+      return g.publishers[0] ?? null
+    case 'author':
+      return g.authors[0] ?? null
   }
 }
 
@@ -287,6 +301,12 @@ export function groupOf(it: Item, g: GroupKey): string {
       return game.series ?? 'Sans gamme'
     case 'status':
       return statusLabel[copy.status]
+    case 'publisher':
+      return game.publishers[0] ?? 'Éditeur inconnu'
+    case 'author':
+      return game.authors[0] ?? 'Auteur inconnu'
+    case 'genre':
+      return game.genres[0] ?? 'Sans type'
   }
 }
 
@@ -306,7 +326,7 @@ export function groupItems(list: Item[], g: GroupKey): Group[] {
     else map.set(k, [it])
   }
   const groups = [...map.entries()].map(([key, items]) => ({ key, items }))
-  if (g === 'letter' || g === 'platform' || g === 'platformFamily' || g === 'series')
+  if (['letter', 'platform', 'platformFamily', 'series', 'publisher', 'author', 'genre'].includes(g))
     groups.sort((a, b) => collator.compare(a.key, b.key))
   if (g === 'year') groups.sort((a, b) => Number(b.key) - Number(a.key) || 0)
   return groups

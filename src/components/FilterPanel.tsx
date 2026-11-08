@@ -59,6 +59,7 @@ export function FilterPanel({ query, setQuery, scope, resultCount, wishlist, sav
       platforms: facet(scoped, (it) => [it.copy.platform]),
       languages: facet(scoped, (it) => (it.copy.language ? [it.copy.language] : it.game.languages)),
       publishers: facet(scoped, (it) => it.game.publishers),
+      authors: facet(scoped, (it) => it.game.authors),
       series: facet(scoped, (it) => [it.game.series]),
       genres: facet(scoped, (it) => it.game.genres),
       locations: facet(scoped, (it) => [it.copy.location]),
@@ -308,18 +309,23 @@ export function FilterPanel({ query, setQuery, scope, resultCount, wishlist, sav
           </div>
         </Section>
 
-        <Section
-          title="Inventaire"
-          hint="Genre, langue, éditeur, emplacement, tags"
-          collapsible
-          open={!!(f.genres.length || f.languages.length || f.publishers.length || f.locations.length || f.tags.length)}
-        >
-          <span className="field-label">Genre / catégorie</span>
+        <Section title="Type, éditeur, auteur">
+          <span className="field-label">{query.family === 'jds' ? 'Type' : 'Type / genre'}</span>
           <FacetChips values={facets.genres} selected={f.genres} onToggle={(v) => setF({ genres: toggle(f.genres, v) })} limit={10} />
-          <span className="field-label">Langue</span>
-          <FacetChips values={facets.languages} selected={f.languages} onToggle={(v) => setF({ languages: toggle(f.languages, v) })} limit={6} />
           <span className="field-label">Éditeur</span>
           <FacetChips values={facets.publishers} selected={f.publishers} onToggle={(v) => setF({ publishers: toggle(f.publishers, v) })} limit={10} />
+          <span className="field-label">Auteur</span>
+          <FacetChips values={facets.authors} selected={f.authors ?? []} onToggle={(v) => setF({ authors: toggle(f.authors ?? [], v) })} limit={10} />
+        </Section>
+
+        <Section
+          title="Inventaire"
+          hint="Langue, emplacement, tags"
+          collapsible
+          open={!!(f.languages.length || f.locations.length || f.tags.length)}
+        >
+          <span className="field-label">Langue</span>
+          <FacetChips values={facets.languages} selected={f.languages} onToggle={(v) => setF({ languages: toggle(f.languages, v) })} limit={6} />
           <span className="field-label">Emplacement</span>
           <FacetChips values={facets.locations} selected={f.locations} onToggle={(v) => setF({ locations: toggle(f.locations, v) })} />
           <span className="field-label">Tags</span>

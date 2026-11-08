@@ -5,6 +5,7 @@ import { EditPage } from './pages/EditPage'
 import { GamePage } from './pages/GamePage'
 import { CompletePage } from './pages/CompletePage'
 import { CoversPage } from './pages/CoversPage'
+import { TypesPage } from './pages/TypesPage'
 import { LoginPage } from './pages/LoginPage'
 import { ScanPage } from './pages/ScanPage'
 import { SearchPage } from './pages/SearchPage'
@@ -25,7 +26,7 @@ const NAV: NavItem[] = [
   { key: 'wishlist', href: '#/wishlist', label: 'Wishlist', icon: 'heart', active: (r) => r.name === 'wishlist' },
   { key: 'scan', href: '#/scan', label: 'Scan', icon: 'scan', active: (r) => r.name === 'scan' },
   { key: 'add', href: '#/ajout', label: 'Ajouter', icon: 'plus', active: (r) => r.name === 'search' || r.name === 'new' },
-  { key: 'settings', href: '#/reglages', label: 'Réglages', icon: 'settings', active: (r) => r.name === 'settings' || r.name === 'covers' },
+  { key: 'settings', href: '#/reglages', label: 'Réglages', icon: 'settings', active: (r) => r.name === 'settings' || r.name === 'covers' || r.name === 'types' },
 ]
 
 function Shell({ route, children }: { route: Route; children: ReactNode }) {
@@ -119,6 +120,9 @@ export default function App() {
       break
     case 'covers':
       page = <CoversPage />
+      break
+    case 'types':
+      page = <TypesPage />
       break
     case 'editGame':
       page = <EditPage key={`eg-${route.id}`} mode={route} />

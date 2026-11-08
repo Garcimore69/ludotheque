@@ -1,4 +1,5 @@
 import { FunctionsHttpError } from '@supabase/supabase-js'
+import { computeTypes } from './bggfr'
 import { norm as baseNorm } from './query'
 import { supabase } from './supabase'
 import type { Family, Game, Kind } from './types'
@@ -112,7 +113,16 @@ export const searchOnline = (q: string, families: Family[]) =>
 /** product=false : pas d'appel à UPCitemdb (quota de 100/jour), pour les traitements par lot. */
 export const lookupBarcode = (code: string, product = true) => call<BarcodeAnswer>({ action: 'barcode', code, product })
 
-export const fetchDetails = async (source: OnlineSource, id: string) => (await call<{ draft: Draft }>({ action: 'details', source, id })).draft
+/** Fiche brute de la source (catégories et mécanismes BGG en anglais). */
+export const fetchRawDetails = async (source: OnlineSource, id: string) => (await call<{ draft: Draft }>({ action: 'details', source, id })).draft
+/** Fiche prête pour l'app : JdS BGG avec types courts, thèmes et mécanismes en français. */
+export const fetchDetails = async (source: OnlineSource, id: string) => localizeDraft(await fetchRawDetails(source, id))
+
+export function localizeDraft(d: Draft): Draft {
+  if (d.family !== 'jds' || d.source !== 'bgg') return d
+  const t = computeTypes({ categories: d.genres, mechanics: d.mechanics, title: d.title, players_min: d.players_min, previous: [] })
+  return { ...d, genres: t.types, mechanics: t.mechanics, themes: t.themes }
+}
 
 // ---------------------------------------------------------------- Codes-barres
 
