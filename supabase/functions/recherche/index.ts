@@ -614,16 +614,18 @@ async function olDetails(id: string): Promise<Draft> {
 // ---------------------------------------------------------------- Codes-barres
 
 // deno-lint-ignore no-explicit-any
-async function gameUpc(code: string): Promise<{ verified: boolean; items: any[] }> {
+async function gameUpc(code: string): Promise<{ verified: boolean; items: any[]; name: string | null }> {
   const base = env('GAMEUPC_URL') || 'https://api.gameupc.com/test'
   const key = env('GAMEUPC_KEY') || 'test_test_test_test_test'
   return await cached(`gameupc:${code}`, 24 * 3600e3, async () => {
     const res = await http(`${base}/upc/${code}`, { headers: { 'x-api-key': key } })
-    if (res.status === 404) return { verified: false, items: [] }
+    if (res.status === 404) return { verified: false, items: [], name: null }
     if (!res.ok) throw new SourceError(`GameUPC : erreur ${res.status}`)
     const j = await res.json()
     const items = Array.isArray(j.bgg_info) ? j.bgg_info : []
-    return { verified: j.bgg_info_status === 'verified', items }
+    // GameUPC connaît souvent le nom commercial du produit, même pour un jeu vidéo
+    const name = [j.name, j.searched_for].find((s) => typeof s === 'string' && s.trim().length > 1) ?? null
+    return { verified: j.bgg_info_status === 'verified', items, name: name ? String(name).trim() : null }
   })
 }
 
@@ -645,11 +647,16 @@ async function upcItemDb(code: string): Promise<{ title: string; category: strin
 const PLATFORM_WORDS =
   /\b(nintendo\s+switch(\s*2)?|switch|ps[1-5]|ps\s?vita|psp|playstation\s*(\d|vita|portable)?|xbox\s*(one|360|series\s*[xs](\s*\|\s*s)?)?|wii\s*u?|nintendo\s*(3ds|ds|64|gamecube)|3ds|nds|ds|game\s?cube|gba|game\s*boy(\s*advance|\s*color)?|pc|dvd-?rom|mac|sega|dreamcast)\b/gi
 
+// Mentions d'édition qui gênent la recherche par titre (« Day One Edition », « Édition Limitée »…)
+const EDITION_WORDS =
+  /\b(day\s*one|launch|limited|limit[ée]e|deluxe|collector'?s?|standard|ultimate|gold|premium|special|sp[ée]ciale|steelbook|game\s+of\s+the\s+year|goty|complete|essentials|platinum|classics|hits)\s+(edition|[ée]dition|version)\b|\b([ée]dition|edition)\s+(day\s*one|limit[ée]e|deluxe|collector|standard|sp[ée]ciale|ultime)\b/gi
+
 export function cleanProductTitle(t: string): { title: string; platform: string | null } {
   const platform = t.match(PLATFORM_WORDS)?.[0]?.trim() ?? null
   let title = t
     .replace(/\[[^\]]*\]|\([^)]*\)/g, ' ')
     .replace(PLATFORM_WORDS, ' ')
+    .replace(EDITION_WORDS, ' ')
     .replace(/\b(pal|ntsc|fr|uk|eur?|standard)\s+(edition|version)\b/gi, ' ')
     .replace(/\b(pal|ntsc|import|jeu\s+vid[ée]o|video\s*game|neuf|new|sealed)\b/gi, ' ')
   // séparateurs orphelins (« Titre - - », « - Titre »)
@@ -662,19 +669,33 @@ export function cleanProductTitle(t: string): { title: string; platform: string 
   return { title: title || t.trim(), platform }
 }
 
+/** Recherche IGDB tolérante : si le titre complet ne donne rien, on raccourcit (avant « : », puis mot à mot). */
+async function igdbLoose(title: string): Promise<Candidate[]> {
+  const tries = [title]
+  const head = title.split(/\s[-–—:|]\s|:\s/)[0].trim()
+  if (head && head !== title) tries.push(head)
+  const words = title.split(/\s+/)
+  if (words.length > 3) tries.push(words.slice(0, 3).join(' '))
+  for (const q of tries) {
+    const list = await igdbSearch(q)
+    if (list.length) return list
+  }
+  return []
+}
+
 interface BarcodeResult {
   candidates: Candidate[]
   product: { title: string; query: string; platform: string | null; image: string | null } | null
 }
 
-async function barcode(code: string, errors: Record<string, string>, withProduct = true): Promise<BarcodeResult> {
+async function barcode(code: string, errors: Record<string, string>, withProduct = true, hint: Family | null = null): Promise<BarcodeResult> {
   const out: Candidate[] = []
   const isbn = isIsbn(code)
 
-  const [upc, book] = await Promise.all([
+  const [upc, book, upcdb] = await Promise.all([
     gameUpc(code).catch((e) => {
       errors.gameupc = (e as Error).message
-      return { verified: false, items: [] }
+      return { verified: false, items: [], name: null }
     }),
     isbn
       ? olDetails(code).catch((e) => {
@@ -682,44 +703,34 @@ async function barcode(code: string, errors: Record<string, string>, withProduct
           return null
         })
       : Promise.resolve(null),
+    // Jeu vidéo annoncé : le nom du produit est indispensable, on le demande tout de suite
+    withProduct && hint === 'jv'
+      ? upcItemDb(code).catch((e) => {
+          errors.upcitemdb = (e as Error).message
+          return null
+        })
+      : Promise.resolve(undefined),
   ])
 
-  if (upc.items.length) {
-    for (const it of upc.items.slice(0, 8)) {
-      const id = String(it.id ?? it.bgg_id ?? '')
-      if (!id) continue
-      out.push({
-        source: 'bgg',
-        id,
-        family: 'jds',
-        title: String(it.name ?? ''),
-        alt: null,
-        year: num(it.published),
-        thumb: it.thumbnail_url ?? null,
-        cover: it.image_url ?? null,
-        platforms: [],
-        info: upc.verified ? 'Code-barre vérifié (GameUPC)' : 'Suggestion GameUPC',
-        kind: 'base',
-        exact: upc.verified,
-      })
-    }
-    // Vignettes manquantes : un appel BGG groupé (si configuré)
-    const missing = out.filter((c) => !c.thumb || !c.title)
-    if (missing.length && env('BGG_TOKEN')) {
-      try {
-        const t = await bggThings(missing.map((c) => c.id))
-        for (const c of missing) {
-          const x = t.get(c.id)
-          if (!x) continue
-          c.thumb ??= x.thumb
-          c.cover ??= x.cover
-          c.title ||= x.primary
-          c.kind = bggKind(x.type)
-        }
-      } catch (e) {
-        errors.bgg = (e as Error).message
-      }
-    }
+  // Suggestions GameUPC (toujours des JdS BGG)
+  const suggestions: Candidate[] = []
+  for (const it of upc.items.slice(0, 8)) {
+    const id = String(it.id ?? it.bgg_id ?? '')
+    if (!id) continue
+    suggestions.push({
+      source: 'bgg',
+      id,
+      family: 'jds',
+      title: String(it.name ?? ''),
+      alt: null,
+      year: num(it.published),
+      thumb: it.thumbnail_url ?? null,
+      cover: it.image_url ?? null,
+      platforms: [],
+      info: upc.verified ? 'Code-barre vérifié (GameUPC)' : 'Suggestion GameUPC',
+      kind: 'base',
+      exact: upc.verified,
+    })
   }
 
   if (book) {
@@ -739,23 +750,58 @@ async function barcode(code: string, errors: Record<string, string>, withProduct
     })
   }
 
-  // Rien de vérifié : on demande le nom du produit, puis on cherche ce titre.
+  // Rien de vérifié : on cherche le nom du produit (UPCitemdb, sinon le nom connu de GameUPC), puis ce titre.
   let product: BarcodeResult['product'] = null
-  if (withProduct && !out.some((c) => c.exact)) {
-    const p = await upcItemDb(code).catch((e) => {
-      errors.upcitemdb = (e as Error).message
-      return null
-    })
+  let video = hint === 'jv'
+  const found: Candidate[] = []
+  if (withProduct && !upc.verified && !book) {
+    let p = upcdb === undefined
+      ? await upcItemDb(code).catch((e) => {
+          errors.upcitemdb = (e as Error).message
+          return null
+        })
+      : upcdb
+    if (!p && upc.name) p = { title: upc.name, category: null, image: null }
     if (p) {
       const { title, platform } = cleanProductTitle(p.title)
       product = { title: p.title, query: title, platform, image: p.image }
-      const boardgame = /board game|jeu de soci|card game|toys/i.test(p.category ?? '')
+      const cat = p.category ?? ''
+      // Une plateforme dans le nom (« Xbox Series X ») ou la catégorie suffit à reconnaître un JV
+      video ||= !!platform || /video\s*game|jeux?\s+vid[ée]o/i.test(cat)
+      const board = !video && (hint === 'jds' || hint === 'jdr' || /board game|jeu de soci|card game|toys/i.test(cat))
       const jobs: Promise<Candidate[]>[] = []
-      if (!boardgame && env('TWITCH_CLIENT_ID')) jobs.push(igdbSearch(title).catch((e) => ((errors.igdb = e.message), [])))
-      if ((boardgame || !env('TWITCH_CLIENT_ID')) && env('BGG_TOKEN')) jobs.push(bggSearch(title, 'jds').catch((e) => ((errors.bgg = e.message), [])))
-      for (const list of await Promise.all(jobs)) out.push(...list.slice(0, 10))
+      if (!board && env('TWITCH_CLIENT_ID')) jobs.push(igdbLoose(title).catch((e) => ((errors.igdb = e.message), [])))
+      if (!video && (board || !env('TWITCH_CLIENT_ID')) && !suggestions.length && env('BGG_TOKEN'))
+        jobs.push(bggSearch(title, hint === 'jdr' ? 'jdr' : 'jds').catch((e) => ((errors.bgg = e.message), [])))
+      for (const list of await Promise.all(jobs)) found.push(...list.slice(0, 10))
     }
   }
+
+  // Ordre : code vérifié, puis (JV) les résultats IGDB ; les suggestions GameUPC non vérifiées
+  // ne sont gardées que si rien n'indique un jeu vidéo.
+  const keepSuggestions = upc.verified || !video
+  if (keepSuggestions && suggestions.length) {
+    // Vignettes manquantes : un appel BGG groupé (si configuré)
+    const missing = suggestions.filter((c) => !c.thumb || !c.title)
+    if (missing.length && env('BGG_TOKEN')) {
+      try {
+        const t = await bggThings(missing.map((c) => c.id))
+        for (const c of missing) {
+          const x = t.get(c.id)
+          if (!x) continue
+          c.thumb ??= x.thumb
+          c.cover ??= x.cover
+          c.title ||= x.primary
+          c.kind = bggKind(x.type)
+        }
+      } catch (e) {
+        errors.bgg = (e as Error).message
+      }
+    }
+  }
+  if (upc.verified) out.unshift(...suggestions)
+  if (video) out.push(...found)
+  else out.push(...(keepSuggestions ? suggestions.filter((c) => !c.exact) : []), ...found)
   return { candidates: out, product }
 }
 
@@ -860,7 +906,8 @@ export async function handle(req: Request): Promise<Response> {
       case 'barcode': {
         const code = String(body.code ?? '').replace(/[^\dX]/gi, '').toUpperCase()
         if (!/^(\d{8}|\d{12,14}|\d{9}[\dX])$/.test(code)) return reply({ error: 'Code-barre invalide' }, 400)
-        return reply({ ...(await barcode(code, errors, body.product !== false)), errors })
+        const hint = ['jds', 'jv', 'jdr'].includes(body.family) ? (body.family as Family) : null
+        return reply({ ...(await barcode(code, errors, body.product !== false, hint)), errors })
       }
       case 'details': {
         const draft = await details(String(body.source ?? ''), String(body.id ?? ''))

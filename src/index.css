@@ -2086,3 +2086,8 @@ button.row:disabled {
 .attribution a {
   color: inherit;
 }
+
+/* Écran de scan : type de jeu attendu */
+.scan-family {
+  margin: 0 0 12px;
+}

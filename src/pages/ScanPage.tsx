@@ -1,11 +1,22 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Icon } from '../components/Icon'
+import { familyLabel } from '../lib/labels'
 import { CandidateRow, LocalRow, SourceErrors, useChoose } from '../components/Online'
 import { localPlatforms, platformFromHint } from '../lib/labels'
 import { cleanCode, gamesByCode, localSearch, lookupBarcode, setPending, validEan, type BarcodeAnswer } from '../lib/online'
 import { back, go } from '../lib/router'
 import { useStore } from '../lib/store'
-import type { Game } from '../lib/types'
+import type { Family, Game } from '../lib/types'
+
+/** Type de jeu attendu : celui de l'onglet ouvert dans la collection (ou la wishlist), sinon « Auto ». */
+function tabFamily(wishlist: boolean): Family | null {
+  try {
+    const f = JSON.parse(localStorage.getItem(wishlist ? 'ludo-query-wishlist' : 'ludo-query-collection') ?? '{}')?.family
+    return f === 'jds' || f === 'jv' || f === 'jdr' ? f : null
+  } catch {
+    return null
+  }
+}
 
 // L'API BarcodeDetector (Chrome Android, Safari récent) n'est pas encore dans les types TypeScript.
 interface Detected {
@@ -180,6 +191,7 @@ export function ScanPage({ wishlist }: { wishlist: boolean }) {
   const [attach, setAttach] = useState(false)
   const [done, setDone] = useState<Game | null>(null)
   const [online, setOnline] = useState(false)
+  const [family, setFamily] = useState<Family | null>(() => tabFamily(wishlist))
   const hint = answer?.product?.platform ?? null
   const { choose, busy, error: chooseError, rememberCode } = useChoose({ barcode: code ?? undefined, wishlist, platformHint: hint })
 
@@ -192,7 +204,7 @@ export function ScanPage({ wishlist }: { wishlist: boolean }) {
     let alive = true
     setLoading(true)
     setError(null)
-    lookupBarcode(code)
+    lookupBarcode(code, true, family)
       .then((r) => alive && setAnswer(r))
       .catch((e) => alive && setError((e as Error).message))
       .finally(() => alive && setLoading(false))
@@ -200,7 +212,7 @@ export function ScanPage({ wishlist }: { wishlist: boolean }) {
       alive = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [code, ready, online])
+  }, [code, ready, online, family])
 
   const reset = () => {
     setCode(null)
@@ -227,6 +239,13 @@ export function ScanPage({ wishlist }: { wishlist: boolean }) {
     const p = new URLSearchParams()
     if (answer?.product?.query) p.set('q', answer.product.query)
     if (code) p.set('code', code)
+    if (family) {
+      try {
+        localStorage.setItem('ludo-search-scope', JSON.stringify(family))
+      } catch {
+        /* stockage indisponible */
+      }
+    }
     go(`/ajout${wishlist ? '/wishlist' : ''}?${p}`)
   }
 
@@ -332,6 +351,13 @@ export function ScanPage({ wishlist }: { wishlist: boolean }) {
                       {chooseError}
                     </p>
                   )}
+                  <div className="chips scan-family" role="group" aria-label="Type de jeu scanné">
+                    {([null, 'jv', 'jds', 'jdr'] as const).map((f) => (
+                      <button key={f ?? 'auto'} type="button" className={family === f ? 'chip on' : 'chip'} aria-pressed={family === f} onClick={() => setFamily(f)}>
+                        {f ? familyLabel[f] : 'Auto'}
+                      </button>
+                    ))}
+                  </div>
                   {answer?.product && (
                     <p className="muted small">
                       Produit : « {answer.product.title} »{wanted ? ` · ${wanted}` : ''}

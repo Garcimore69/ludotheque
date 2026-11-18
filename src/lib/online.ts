@@ -111,7 +111,9 @@ export const searchOnline = (q: string, families: Family[]) =>
   call<{ results: Candidate[]; errors: Record<string, string> }>({ action: 'search', q, families })
 
 /** product=false : pas d'appel à UPCitemdb (quota de 100/jour), pour les traitements par lot. */
-export const lookupBarcode = (code: string, product = true) => call<BarcodeAnswer>({ action: 'barcode', code, product })
+/** family : type annoncé (onglet de la collection ou choix sur l'écran de scan) ; null = deviner. */
+export const lookupBarcode = (code: string, product = true, family: Family | null = null) =>
+  call<BarcodeAnswer>({ action: 'barcode', code, product, family })
 
 /** Fiche brute de la source (catégories et mécanismes BGG en anglais). */
 export const fetchRawDetails = async (source: OnlineSource, id: string) => (await call<{ draft: Draft }>({ action: 'details', source, id })).draft
