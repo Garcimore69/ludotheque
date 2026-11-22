@@ -202,7 +202,7 @@ export function SettingsPage() {
             {!diag ? 'vérification…' : diag.etat === 'ok' ? 'connectée' : diag.etat === 'absent' ? `non configurée (${diag.manque.join(', ')})` : diag.detail}
           </li>
         </ul>
-        <p className="muted small">Version lot 2.2 · collection, tri, filtres, wishlist, photos, recherche en ligne, scan (JV reconnus), jaquettes, types de jeu.</p>
+        <p className="muted small">Version lot 2.3 · collection, tri, filtres, wishlist, photos, recherche en ligne, scan (JV reconnus), jaquettes, types de jeu.</p>
       </section>
     </div>
   )

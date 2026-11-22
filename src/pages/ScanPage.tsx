@@ -237,7 +237,9 @@ export function ScanPage({ wishlist }: { wishlist: boolean }) {
 
   const byTitle = () => {
     const p = new URLSearchParams()
-    if (answer?.product?.query) p.set('q', answer.product.query)
+    // En mode Vidéo, un nom sans plateforme vient d'une devinette GameUPC (jeu de société) : on ne le reprend pas.
+    const trusted = family !== 'jv' || !!answer?.product?.platform
+    if (answer?.product?.query && trusted) p.set('q', answer.product.query)
     if (code) p.set('code', code)
     if (family) {
       try {
@@ -258,6 +260,13 @@ export function ScanPage({ wishlist }: { wishlist: boolean }) {
       setError((e as Error).message)
     }
   }
+
+  // Mode Vidéo et code inconnu de toutes les sources : on passe directement à la recherche par titre.
+  const unknown = !!code && !!answer && !loading && !error && !local.length && !answer.candidates.length
+  useEffect(() => {
+    if (unknown && family === 'jv') byTitle()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unknown, family])
 
   // Résultats : ceux qui tournent sur la plateforme devinée d'abord
   const wanted = platformFromHint(hint)
