@@ -314,7 +314,7 @@ export function EditPage({ mode }: { mode: EditMode }) {
   }, [mode.name])
   const draftPlatforms = useMemo(() => (draft ? localPlatforms(draft.platforms) : []), [draft])
 
-  const [family, setFamily] = useState<Family>(existingGame?.family ?? draft?.family ?? 'jds')
+  const [family, setFamily] = useState<Family>(existingGame?.family ?? draft?.family ?? pending.family ?? 'jds')
   const [useCover, setUseCover] = useState(true)
   const [values, setValues] = useState<Values>(() => {
     const src: Record<string, unknown> = draft ? draftToGame(draft, games.values()) : { kind: 'base' }

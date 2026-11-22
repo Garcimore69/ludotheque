@@ -202,6 +202,7 @@ export interface Pending {
   barcode?: string
   wishlist?: boolean
   platformHint?: string | null
+  family?: Family // saisie manuelle : famille pré-choisie (onglet Vidéo, etc.)
 }
 
 const KEY = 'ludo-pending'

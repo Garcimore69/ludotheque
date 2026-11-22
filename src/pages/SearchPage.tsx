@@ -93,7 +93,7 @@ export function SearchPage({ wishlist, initial, code }: { wishlist: boolean; ini
   }, [initial])
 
   const manual = () => {
-    setPending({ barcode, wishlist })
+    setPending({ barcode, wishlist, family: scope === 'all' ? undefined : scope })
     go(`/ajout/manuel${wishlist ? '/wishlist' : ''}`)
   }
 

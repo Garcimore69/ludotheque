@@ -231,7 +231,7 @@ export function ScanPage({ wishlist }: { wishlist: boolean }) {
   }
 
   const manual = () => {
-    setPending({ barcode: code ?? undefined, wishlist, platformHint: hint })
+    setPending({ barcode: code ?? undefined, wishlist, platformHint: hint, family: family ?? undefined })
     go(`/ajout/manuel${wishlist ? '/wishlist' : ''}`)
   }
 
